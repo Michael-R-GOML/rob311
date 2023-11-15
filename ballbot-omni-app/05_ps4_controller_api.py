@@ -1,29 +1,19 @@
 import sys
 import threading
-import time
 import numpy as np
-from threading import Thread
-from MBot.Messages.message_defs import mo_states_dtype, mo_cmds_dtype, mo_pid_params_dtype
-from MBot.SerialProtocol.protocol import SerialProtocol
-from DataLogger import dataLogger
+from pyPS4Controller.controller import Controller
 
 # ---------------------------------------------------------------------------
-"""
-ROB 311 - Ball-bot Sensing and Reading Demo
-This program uses a soft realtime loop to enforce loop timing. Soft real time loop is a  class
-designed to allow clean exits from infinite loops with the potential for post-loop cleanup operations executing.
-
-The Loop Killer object watches for the key shutdown signals on the UNIX operating system (which runs on the PI)
-when it detects a shutdown signal, it sets a flag, which is used by the Soft Realtime Loop to stop iterating.
-Typically, it detects the CTRL-C from your keyboard, which sends a SIGTERM signal.
-
-the function_in_loop argument to the Soft Realtime Loop's blocking_loop method is the function to be run every loop.
-A typical usage would set function_in_loop to be a method of an object, so that the object could store program state.
-See the 'ifmain' for two examples.
-
-Authors: Senthur Raj, Gray Thomas, Yves Nazon and Elliott Rouse 
-Neurobionics Lab / Locomotor Control Lab
-"""
+# ROB 311 PS4 Controller class
+# Add these code snippets to your balance controller
+# To use the torque commands from the PS4 controller, set the torques to values obtained
+# from button presses. This script will print when some buttons are pressed and serves as an example
+# using the PS4 controller.  This script also has three example methods for commanding torque using 
+# the PS4 controller (rob311_bt_controller.tz_demo_X), which can be used to set the Tz torque in your
+# balance script.
+# 
+# The soft real-time loop is already included in your balance control script.
+# Authors: Senthur Raj, Gray Thomas, and Elliott Rouse
 
 import signal
 import time
@@ -177,89 +167,104 @@ class SoftRealtimeLoop:
 
 # ---------------------------------------------------------------------------
 
+JOYSTICK_SCALE = 32767
+
 FREQ = 200
 DT = 1/FREQ
 
-RW = 0.048
-RK = 0.1210
-ALPHA = np.deg2rad(45)
+class ROB311BTController(Controller):
+    def __init__(self, interface, connecting_using_ds4drv=False, event_definition=None, event_format=None):
+        super().__init__(interface, connecting_using_ds4drv, event_definition, event_format)
 
-def register_topics(ser_dev:SerialProtocol):
-    # Mo :: Commands, States
-    ser_dev.serializer_dict[101] = [lambda bytes: np.frombuffer(bytes, dtype=mo_cmds_dtype), lambda data: data.tobytes()]
-    ser_dev.serializer_dict[121] = [lambda bytes: np.frombuffer(bytes, dtype=mo_states_dtype), lambda data: data.tobytes()]
+        # ------------------------------------
+        # Declare required attributes/values 
+
+        # DEMO 1: Modifying Tz value with Triggers
+        self.tz_demo_1 = 0.0
+
+        # DEMO 2: Modifying Tz value with Right Thumbstick (UP/DOWN)
+        self.tz_demo_2 = 0.0
+
+        # DEMO 3: Modifying Tz value with Shoulder/Bumper Buttons
+        self.tz_demo_3 = 0
+
+        # ------------------------------------
+
+    # Continuous value with Triggers
+
+    def on_R2_press(self, value):
+        # Normalizing raw values from [-1.0, 1.0] to [0.0, 1.0]
+        self.tz_demo_1 = (1.0 + np.abs(value/JOYSTICK_SCALE))/2.0
+
+    def on_R2_release(self):
+        # Reset values
+        self.tz_demo_1 = 0.0
+
+    def on_L2_press(self, value):
+        # Normalizing raw values from [-1.0, 1.0] to [-1.0, 0.0]
+        self.tz_demo_1 = -1 * (1.0 + np.abs(value/JOYSTICK_SCALE))/2.0
+
+    def on_L2_release(self):
+        # Reset values
+        self.tz_demo_1 = 0.0
+
+    # ----------------------------------------
+    # Continuous value with Right Thumbstick (UP/DOWN)
+
+    def on_R3_up(self, value):
+        # Inverting y-axis value
+        self.tz_demo_2 = -1.0 * value/JOYSTICK_SCALE
+
+    def on_R3_down(self, value):
+        # Inverting y-axis value
+        self.tz_demo_2 = -1.0 * value/JOYSTICK_SCALE
+
+    def on_R3_y_at_rest(self):
+        self.tz_demo_2 = 0.0
+
+    # ----------------------------------------
+    # Integer tz_demo_3s
+
+    def on_R1_press(self):
+        print("R1 button pressed!")
+        self.tz_demo_3 += 1
+
+    def on_R1_release(self):
+        pass
+
+    def on_L1_press(self):
+        print("L1 button pressed!")
+        self.tz_demo_3 -= 1
+
+    def on_L1_release(self):
+        pass
+
+    # ----------------------------------------
+
+    def on_options_press(self):
+        print("Exiting PS4 controller thread.")
+        sys.exit()
 
 if __name__ == "__main__":
-    trial_num = int(input('Trial Number? '))
-    filename = 'ROB311_Test%i' % trial_num
-    dl = dataLogger(filename + '.txt')
 
-    ser_dev = SerialProtocol()
-    register_topics(ser_dev)
+    # Starting a separate thread for the BT-Controller <<>> RPi communication
+    # Press "Options" button to exit this thread
 
-    # Init serial
-    serial_read_thread = Thread(target = SerialProtocol.read_loop, args=(ser_dev,), daemon=True)
-    serial_read_thread.start()
+    rob311_bt_controller = ROB311BTController(interface="/dev/input/js0")
+    rob311_bt_controller_thread = threading.Thread(target=rob311_bt_controller.listen, args=(10,))
+    rob311_bt_controller_thread.start()
 
-    # Local structs
-    commands = np.zeros(1, dtype=mo_cmds_dtype)[0]
-    states = np.zeros(1, dtype=mo_states_dtype)[0]
+    # The "rob311_bt_controller" object has Tz attributes that can be called/used anywhere within the main block--these are potential ways to control
+    # vertical axis torque using different commands from the PS4 controller
+    # You can also create your own variable (e.g. rob311_bt_controller.tz) and use the button commands to create your own torque command using the button presses
 
-    commands['start'] = 1.0
-
-    # Time for comms to sync
-    time.sleep(1.0)
-
-    ser_dev.send_topic_data(101, commands)
-
-    print('Beginning program!')
-    i = 0
+    # DEMO 1: Modifying Tz value with Triggers
+    # DEMO 2: Modifying Tz value with Right Thumbstick (UP/DOWN)
+    # DEMO 3: Modifying Tz value with Shoulder/Bumper Buttons
 
     for t in SoftRealtimeLoop(dt=DT, report=True):
-        try:
-            states = ser_dev.get_cur_topic_data(121)[0]
-        except KeyError as e:
-            continue
-
-        if i == 0:
-            print('Finished calibration\nStarting loop...')
-            t_start = time.time()
-
-        i = i + 1
-        t_now = time.time() - t_start
-
-        ser_dev.send_topic_data(101, commands)
-
-        # Define variables for saving / analysis here - below you can create variables from the available states
-        # Ball-Bot Orientation
-        theta_x = states['theta_roll']
-        theta_y = states['theta_pitch']
-        # Wheel Velocities
-        dpsi_1 = states['dpsi_1']
-        dpsi_2 = states['dpsi_2']
-        dpsi_3 = states['dpsi_3']
-        
-        #########################
-        # YOUR CODE GOES HERE
-        # Wheel Rotations
-        #########################
-        psi_1 = states['psi_1']
-        psi_2 = states['psi_2']
-        psi_3 = states['psi_3']
-
-        # Construct the data matrix for saving - Add wheel speed and rotations by replicating the format below
-        #########################
-        # MODIFY THE LINE BELOW
-        data = [i, t_now, theta_x, theta_y, psi_1, psi_2, psi_3, dpsi_1, dpsi_2, dpsi_3]
-        #########################
-        
-        dl.appendData(data)
-
-    print("Saving data...")
-    dl.writeOut()
-    print("Resetting Motor Commands.")
-    commands['start'] = 0.0
-    commands['motor_1_duty'] = 0.0
-    commands['motor_2_duty'] = 0.0
-    commands['motor_3_duty'] = 0.0
-    ser_dev.send_topic_data(101, commands)
+        print("Tz Demo 1: {}\nTz Demo 2: {}\nTz Demo 3: {}\n".format(
+            rob311_bt_controller.tz_demo_1,
+            rob311_bt_controller.tz_demo_2,
+            rob311_bt_controller.tz_demo_3
+        ))
