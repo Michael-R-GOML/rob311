@@ -389,7 +389,7 @@ if __name__ == "__main__":
                     'colors' : ["r", "g", "b"],
                     'line_width': [2]*3,
                     }    
-    plot_config = [imu_states, motor_velocities]
+    plot_config = [imu_states, motor_velocities, stability_controller]
     client.initialize_plots(plot_config)
     rtplot_data = []
 
@@ -449,6 +449,9 @@ if __name__ == "__main__":
             continue
 
         t_now = time.time() - t_start
+
+        if t_now > 8: 
+            desired_theta_x = np.deg2rad(2)
 
         # Define variables for saving / analysis here - below you can create variables from the available states in message_defs.py
         
