@@ -280,11 +280,11 @@ class ROB311BTController(Controller):
 
 # Proportional gains for the stability controllers (X-Z and Y-Z plane)
 
-KP_THETA_X = 9.0                                 # Adjust until the system balances
-KP_THETA_Y = 9.0                                  # Adjust until the system balances
+KP_THETA_X = 9.5                                 # Adjust until the system balances
+KP_THETA_Y = 9.5                                  # Adjust until the system balances
 
-KI_THETA_X = .5
-KI_THETA_Y = .5
+KI_THETA_X = 0.5
+KI_THETA_Y = 0.5
 
 KD_THETA_X = .05
 KD_THETA_Y = .05
@@ -531,7 +531,7 @@ if __name__ == "__main__":
         commands['motor_3_duty'] = T3  
 
         # Construct the data matrix for saving - you can add more variables by replicating the format below
-        data = [i] + [t_now] + [Px] + [Py] + [Ix] + [Iy] + [Dx] + [Dy] + [theta_x] + [theta_y] + [T1] + [T2] + [T3] + [phi_x] + [phi_y] + [phi_z] + [psi_1] + [psi_2] + [psi_3]
+        data = [i] + [t_now] + [error_x] + [error_y] + [Px] + [Py] + [Ix] + [Iy] + [Dx] + [Dy] + [theta_x] + [theta_y] + [T1] + [T2] + [T3] + [phi_x] + [phi_y] + [phi_z] + [psi_1] + [psi_2] + [psi_3]
         dl.appendData(data)
 
         print("Iteration no. {}, THETA X: {:.2f}, THETA Y: {:.2f}".format(i, theta_x, theta_y))
