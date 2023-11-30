@@ -281,13 +281,13 @@ class ROB311BTController(Controller):
 # Proportional gains for the stability controllers (X-Z and Y-Z plane)
 
 KP_THETA_X = 9.5                                 # Adjust until the system balances
-KP_THETA_Y = 9.5                                  # Adjust until the system balances
+KP_THETA_Y = 9.5                                # Adjust until the system balances
 
-KI_THETA_X = 0.5
-KI_THETA_Y = 0.5
+KI_THETA_X = .06
+KI_THETA_Y = .06
 
-KD_THETA_X = .05
-KD_THETA_Y = .05
+KD_THETA_X = 0.02
+KD_THETA_Y = 0.02
 
 # ---------------------------------------------------------------------------
 
@@ -449,9 +449,11 @@ if __name__ == "__main__":
             continue
 
         t_now = time.time() - t_start
-
-        if t_now > 8: 
-            desired_theta_x = np.deg2rad(2)
+        desired_theta_x = 0
+        #if t_now > 8: 
+            #desired_theta_x = np.deg2rad(2)
+        #if t_now > 9:
+            #desired_theta_x = 0
 
         # Define variables for saving / analysis here - below you can create variables from the available states in message_defs.py
         
@@ -506,7 +508,7 @@ if __name__ == "__main__":
         Tx = Px + Ix + Dx
         Ty = Py + Iy + Dy
 
-        Tz = rob311_bt_controller.tz_demo_1 + rob311_bt_controller.tz_demo_3 * MAX_PLANAR_DUTY
+        Tz = rob311_bt_controller.tz_demo_1 * MAX_PLANAR_DUTY
 
         # ---------------------------------------------------------
         # Saturating the planar torques 
@@ -516,6 +518,9 @@ if __name__ == "__main__":
 
         if np.abs(Ty) > MAX_PLANAR_DUTY:
             Ty = np.sign(Ty) * MAX_PLANAR_DUTY
+
+        if np.abs(Tz) > MAX_PLANAR_DUTY:
+            Tz = np.sign(Tz) * MAX_PLANAR_DUTY
 
         # ---------------------------------------------------------
 
@@ -534,11 +539,12 @@ if __name__ == "__main__":
         commands['motor_3_duty'] = T3  
 
         # Construct the data matrix for saving - you can add more variables by replicating the format below
-        data = [i] + [t_now] + [error_x] + [error_y] + [Px] + [Py] + [Ix] + [Iy] + [Dx] + [Dy] + [theta_x] + [theta_y] + [T1] + [T2] + [T3] + [phi_x] + [phi_y] + [phi_z] + [psi_1] + [psi_2] + [psi_3]
+        data = [i] + [t_now] + [error_x] + [error_y] + [Px] + [Py] + [Ix] + [Iy] + [Dx] + [Dy] + [theta_x] + [theta_y]  + [desired_theta_x] + [T1] + [T2] + [T3] + [phi_x] + [phi_y] + [phi_z] + [psi_1] + [psi_2] + [psi_3]
         dl.appendData(data)
 
         print("Iteration no. {}, THETA X: {:.2f}, THETA Y: {:.2f}".format(i, theta_x, theta_y))
-        print("Tz Triggers: {}\n".format(rob311_bt_controller.tz_demo_1))
+        #print("Tz Triggers: {}\n".format(rob311_bt_controller.tz_demo_1))
+        print("Time:", t_now)
         ser_dev.send_topic_data(101, commands) # Send motor torques
     
   
